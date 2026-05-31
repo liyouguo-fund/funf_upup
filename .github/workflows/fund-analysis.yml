@@ -100,7 +100,7 @@ print('整合报告已生成: 基金与指数趋势分析.xlsx')
           server_port: ${{ secrets.SMTP_PORT }}
           username: ${{ secrets.SMTP_USER }}
           password: ${{ secrets.SMTP_PASSWORD }}
-          subject: 📊 宽基指数趋势分析报告 - ${{ format('{0:YYYY-MM-DD}', github.event.created_at) || format('{0:YYYY-MM-DD}', now()) }}
+          subject: 📊 宽基指数趋势分析报告
           body: file://output/宽基指数邮件正文.html
           to: ${{ secrets.RECIPIENTS }}
           from: ${{ secrets.SMTP_USER }}
