@@ -1,5 +1,5 @@
 """
-宽基指数趋势大模型 - EMA版本 - 逸飞ETF量化
+宽基指数趋势大模型 - EMA版本 - ETF量化
 
 指标计算（使用EMA指数移动平均）：
 - 趋势线: (最高价 + 最低价) / 2 的20日指数移动平均(EMA)
@@ -12,39 +12,66 @@ import baostock as bs
 import pandas as pd
 import numpy as np
 import os
+import socket
+import sys
 from datetime import datetime, timedelta
 
 
+# 设置全局socket超时，防止卡住
+socket.setdefaulttimeout(15)
+
+
 def get_stock_data(stock_code: str, days: int = 100, end_date: str = None) -> pd.DataFrame:
-    """获取股票/指数数据"""
-    bs.login()
+    """获取股票/指数数据（带超时保护）"""
+    try:
+        lg = bs.login()
+        if lg.error_code != '0':
+            print(f"  baostock登录失败: {lg.error_msg}")
+            return pd.DataFrame()
+        
+        if end_date is None:
+            end_date = datetime.now().strftime('%Y-%m-%d')
+        
+        start_date = (datetime.strptime(end_date, '%Y-%m-%d') - timedelta(days=days)).strftime('%Y-%m-%d')
+        
+        rs = bs.query_history_k_data_plus(
+            stock_code,
+            'date,code,open,high,low,close,volume',
+            start_date=start_date,
+            end_date=end_date,
+            frequency='d'
+        )
+        
+        if rs.error_code != '0':
+            print(f"  查询失败: {rs.error_msg}")
+            bs.logout()
+            return pd.DataFrame()
+        
+        data_list = []
+        while (rs.error_code == '0') & rs.next():
+            data_list.append(rs.get_row_data())
+        
+        bs.logout()
+        
+        if not data_list:
+            print(f"  未获取到数据")
+            return pd.DataFrame()
+        
+        df = pd.DataFrame(data_list, columns=rs.fields)
+        
+        for col in ['open', 'high', 'low', 'close', 'volume']:
+            if col in df.columns:
+                df[col] = pd.to_numeric(df[col], errors='coerce')
+        
+        return df
     
-    if end_date is None:
-        end_date = datetime.now().strftime('%Y-%m-%d')
-    
-    start_date = (datetime.strptime(end_date, '%Y-%m-%d') - timedelta(days=days)).strftime('%Y-%m-%d')
-    
-    rs = bs.query_history_k_data_plus(
-        stock_code,
-        'date,code,open,high,low,close,volume',
-        start_date=start_date,
-        end_date=end_date,
-        frequency='d'
-    )
-    
-    data_list = []
-    while (rs.error_code == '0') & rs.next():
-        data_list.append(rs.get_row_data())
-    
-    bs.logout()
-    
-    df = pd.DataFrame(data_list, columns=rs.fields)
-    
-    for col in ['open', 'high', 'low', 'close', 'volume']:
-        if col in df.columns:
-            df[col] = pd.to_numeric(df[col], errors='coerce')
-    
-    return df
+    except Exception as e:
+        print(f"  获取数据异常: {e}")
+        try:
+            bs.logout()
+        except:
+            pass
+        return pd.DataFrame()
 
 
 def calculate_indicators_ema(df: pd.DataFrame, period: int = 20) -> pd.DataFrame:
@@ -57,6 +84,9 @@ def calculate_indicators_ema(df: pd.DataFrame, period: int = 20) -> pd.DataFrame
        EMA_t = alpha × price_t + (1-alpha) × EMA_{t-1}
        alpha = 2 / (period + 1) = 2/21 ≈ 0.0952
     """
+    if df.empty or len(df) < period:
+        return df
+    
     # 计算 (最高价 + 最低价) / 2
     df['hl2'] = (df['high'] + df['low']) / 2
     
@@ -74,6 +104,14 @@ def analyze_index(stock_code: str, name: str = None, period: int = 20) -> dict:
     """分析单只指数/股票"""
     try:
         df = get_stock_data(stock_code, days=period * 4)
+        
+        if df.empty or len(df) < period:
+            return {
+                'code': stock_code,
+                'name': name or stock_code,
+                'error': f'数据不足（{len(df)}条，需要至少{period}条）'
+            }
+        
         df = calculate_indicators_ema(df, period)
         
         latest = df.iloc[-1]
@@ -307,7 +345,10 @@ if __name__ == "__main__":
         try:
             result = analyze_index(code, name)
             results.append(result)
-            print(f'OK {name}')
+            if 'error' in result:
+                print(f'FAIL {name}: {result["error"]}')
+            else:
+                print(f'OK {name}')
         except Exception as e:
             print(f'FAIL {name}: {str(e)}')
     
