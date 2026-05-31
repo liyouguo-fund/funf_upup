@@ -79,6 +79,27 @@ jobs:
             output/*.html
             logs/*.log
 
+      - name: 发送分析报告邮件（成功时）
+        if: ${{ success() }}
+        uses: dawidd6/action-send-mail@v3
+        with:
+          server_address: ${{ secrets.SMTP_SERVER }}
+          server_port: ${{ secrets.SMTP_PORT }}
+          username: ${{ secrets.SMTP_USER }}
+          password: ${{ secrets.SMTP_PASSWORD }}
+          subject: ✅ 基金趋势分析报告 - ${{ github.event.repository.updated_at || '今日' }}
+          body: |
+            基金趋势分析任务已完成！
+
+            分析内容：
+            - 场外基金趋势分析（WMA版本）
+            - 宽基指数趋势分析（EMA版本）
+
+            详细报告请查看 GitHub Actions 的 Artifacts 下载。
+            任务链接: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+          to: ${{ secrets.RECIPIENTS }}
+          from: ${{ secrets.SMTP_USER }}
+
       - name: 发送失败通知邮件
         if: ${{ failure() }}
         uses: dawidd6/action-send-mail@v3
