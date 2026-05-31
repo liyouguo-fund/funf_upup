@@ -57,20 +57,7 @@ jobs:
 
       - name: 创建整合报告
         id: merge-reports
-        run: |
-          python -c "
-import pandas as pd
-import os
-
-fund_df = pd.read_excel('基金趋势分析.xlsx')
-index_df = pd.read_excel('宽基指数趋势分析.xlsx')
-
-with pd.ExcelWriter('基金与指数趋势分析.xlsx', engine='openpyxl') as writer:
-    fund_df.to_excel(writer, sheet_name='场外基金', index=False)
-    index_df.to_excel(writer, sheet_name='宽基指数', index=False)
-
-print('整合报告已生成: 基金与指数趋势分析.xlsx')
-"
+        run: python merge_reports.py
 
       - name: 创建输出目录并移动文件
         run: |
