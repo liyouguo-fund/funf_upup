@@ -92,6 +92,7 @@ jobs:
           to: ${{ secrets.RECIPIENTS }}
           from: ${{ secrets.SMTP_USER }}
           secure: true
+          ignore_cert: true
 
       - name: 发送失败通知邮件
         if: ${{ failure() }}
@@ -108,3 +109,4 @@ jobs:
           to: ${{ secrets.RECIPIENTS }}
           from: ${{ secrets.SMTP_USER }}
           secure: true
+          ignore_cert: true
