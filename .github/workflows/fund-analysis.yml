@@ -99,6 +99,8 @@ jobs:
             任务链接: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
           to: ${{ secrets.RECIPIENTS }}
           from: ${{ secrets.SMTP_USER }}
+          secure: true
+          ignore_cert: true
 
       - name: 发送失败通知邮件
         if: ${{ failure() }}
@@ -114,3 +116,5 @@ jobs:
             任务链接: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
           to: ${{ secrets.RECIPIENTS }}
           from: ${{ secrets.SMTP_USER }}
+          secure: true
+          ignore_cert: true
