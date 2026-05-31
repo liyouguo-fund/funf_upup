@@ -2,15 +2,11 @@ name: 基金趋势分析报告
 
 on:
   schedule:
-    # 每日09:00运行（北京时间）
+    # 每日09:00运行（北京时间 = UTC+8，所以 UTC 1:00）
     - cron: '0 1 * * *'
   workflow_dispatch:
     # 允许手动触发
     inputs:
-      days_to_keep:
-        description: '保留数据天数'
-        required: false
-        default: '10'
       wencai_query:
         description: '问财选股查询语句，例如：场外基金近1年涨幅top200'
         required: false
@@ -23,25 +19,17 @@ jobs:
 
     steps:
       - name: 检出代码
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
 
       - name: 设置 Python 环境
-        uses: actions/setup-python@v4
+        uses: actions/setup-python@v5
         with:
-          python-version: '3.9'
-
-      - name: 缓存 pip 依赖
-        uses: actions/cache@v3
-        with:
-          path: ~/.cache/pip
-          key: ${{ runner.os }}-pip-${{ hashFiles('requirements.txt') }}
-          restore-keys: |
-            ${{ runner.os }}-pip-
+          python-version: '3.10'
 
       - name: 安装依赖
         run: |
           pip install --upgrade pip
-          pip install pandas numpy matplotlib xalpha openpyxl pywencai baostock
+          pip install -r requirements.txt
 
       - name: 运行场外基金分析
         id: analyze-fund
@@ -79,42 +67,108 @@ jobs:
             output/*.html
             logs/*.log
 
-      - name: 发送分析报告邮件（成功时）
-        if: ${{ success() }}
-        uses: dawidd6/action-send-mail@v3
-        with:
-          server_address: ${{ secrets.SMTP_SERVER }}
-          server_port: ${{ secrets.SMTP_PORT }}
-          username: ${{ secrets.SMTP_USER }}
-          password: ${{ secrets.SMTP_PASSWORD }}
-          subject: ✅ 基金趋势分析报告 - ${{ github.event.repository.updated_at || '今日' }}
-          body: |
-            基金趋势分析任务已完成！
+      - name: 发送邮件通知
+        if: always()
+        env:
+          SMTP_SERVER: ${{ secrets.SMTP_SERVER }}
+          SMTP_PORT: ${{ secrets.SMTP_PORT }}
+          SMTP_USER: ${{ secrets.SMTP_USER }}
+          SMTP_PASSWORD: ${{ secrets.SMTP_PASSWORD }}
+          RECIPIENTS: ${{ secrets.RECIPIENTS }}
+          JOB_STATUS: ${{ job.status }}
+        run: |
+          python -c "
+import smtplib
+import os
+from email.mime.text import MIMEText
+from email.mime.multipart import MIMEMultipart
+from email.mime.base import MIMEBase
+from email import encoders
+from datetime import datetime
 
-            分析内容：
-            - 场外基金趋势分析（WMA版本）
-            - 宽基指数趋势分析（EMA版本）
+# 读取配置
+smtp_server = os.environ.get('SMTP_SERVER', 'smtp.qq.com')
+smtp_port = int(os.environ.get('SMTP_PORT', '465'))
+smtp_user = os.environ.get('SMTP_USER', '')
+smtp_password = os.environ.get('SMTP_PASSWORD', '')
+recipients = os.environ.get('RECIPIENTS', '')
+job_status = os.environ.get('JOB_STATUS', 'success')
+run_id = os.environ.get('GITHUB_RUN_ID', '')
+repo = os.environ.get('GITHUB_REPOSITORY', '')
+server_url = os.environ.get('GITHUB_SERVER_URL', 'https://github.com')
 
-            详细报告请查看 GitHub Actions 的 Artifacts 下载。
-            任务链接: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
-          to: ${{ secrets.RECIPIENTS }}
-          from: ${{ secrets.SMTP_USER }}
-          secure: true
-          ignore_cert: true
+if not smtp_user or not smtp_password or not recipients:
+    print('SMTP配置不完整，跳过邮件发送')
+    exit(0)
 
-      - name: 发送失败通知邮件
-        if: ${{ failure() }}
-        uses: dawidd6/action-send-mail@v3
-        with:
-          server_address: ${{ secrets.SMTP_SERVER }}
-          server_port: ${{ secrets.SMTP_PORT }}
-          username: ${{ secrets.SMTP_USER }}
-          password: ${{ secrets.SMTP_PASSWORD }}
-          subject: ❌ 基金分析任务失败通知
-          body: |
-            基金分析任务失败，请检查GitHub Actions日志。
-            任务链接: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
-          to: ${{ secrets.RECIPIENTS }}
-          from: ${{ secrets.SMTP_USER }}
-          secure: true
-          ignore_cert: true
+recipient_list = [r.strip() for r in recipients.split(',') if r.strip()]
+
+# 构建邮件
+msg = MIMEMultipart('alternative')
+msg['From'] = smtp_user
+msg['To'] = ', '.join(recipient_list)
+
+today = datetime.now().strftime('%Y年%m月%d日')
+
+if job_status == 'success':
+    msg['Subject'] = f'✅ 基金趋势分析报告 - {today}'
+    
+    # 尝试读取生成的HTML邮件正文
+    html_body = ''
+    html_path = 'output/宽基指数邮件正文.html'
+    if os.path.exists(html_path):
+        with open(html_path, 'r', encoding='utf-8') as f:
+            html_body = f.read()
+    
+    if html_body:
+        # 在HTML中嵌入任务链接
+        html_body = html_body.replace('</body>', f'<p style=\"margin-top:20px;font-size:12px;color:#999;\">任务链接: <a href=\"{server_url}/{repo}/actions/runs/{run_id}\">{server_url}/{repo}/actions/runs/{run_id}</a></p></body>')
+        msg.attach(MIMEText(html_body, 'html', 'utf-8'))
+    else:
+        text = f'''基金趋势分析任务已完成！
+
+分析内容：
+- 场外基金趋势分析（WMA版本）
+- 宽基指数趋势分析（EMA版本）
+
+详细报告请查看 GitHub Actions Artifacts。
+任务链接: {server_url}/{repo}/actions/runs/{run_id}
+'''
+        msg.attach(MIMEText(text, 'plain', 'utf-8'))
+else:
+    msg['Subject'] = f'❌ 基金分析任务失败 - {today}'
+    text = f'''基金分析任务失败，请检查GitHub Actions日志。
+
+任务链接: {server_url}/{repo}/actions/runs/{run_id}
+'''
+    msg.attach(MIMEText(text, 'plain', 'utf-8'))
+
+# 尝试附加Excel报告
+for fname in ['output/基金与指数趋势分析.xlsx', 'output/基金趋势分析.xlsx', 'output/宽基指数趋势分析.xlsx']:
+    if os.path.exists(fname):
+        try:
+            with open(fname, 'rb') as f:
+                part = MIMEBase('application', 'octet-stream')
+                part.set_payload(f.read())
+                encoders.encode_base64(part)
+                part.add_header('Content-Disposition', f'attachment; filename={os.path.basename(fname)}')
+                msg.attach(part)
+        except:
+            pass
+
+# 发送邮件
+try:
+    if smtp_port == 465:
+        with smtplib.SMTP_SSL(smtp_server, smtp_port, timeout=30) as server:
+            server.login(smtp_user, smtp_password)
+            server.sendmail(smtp_user, recipient_list, msg.as_string())
+    else:
+        with smtplib.SMTP(smtp_server, smtp_port, timeout=30) as server:
+            server.starttls()
+            server.login(smtp_user, smtp_password)
+            server.sendmail(smtp_user, recipient_list, msg.as_string())
+    print(f'邮件发送成功！收件人: {recipients}')
+except Exception as e:
+    print(f'邮件发送失败: {e}')
+    exit(1)
+"
