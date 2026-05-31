@@ -79,21 +79,6 @@ jobs:
             output/*.html
             logs/*.log
 
-      - name: 发送成功通知邮件
-        if: ${{ success() }}
-        uses: dawidd6/action-send-mail@v3
-        with:
-          server_address: ${{ secrets.SMTP_SERVER }}
-          server_port: ${{ secrets.SMTP_PORT }}
-          username: ${{ secrets.SMTP_USER }}
-          password: ${{ secrets.SMTP_PASSWORD }}
-          subject: 📊 宽基指数趋势分析报告
-          html_body: file://output/宽基指数邮件正文.html
-          to: ${{ secrets.RECIPIENTS }}
-          from: ${{ secrets.SMTP_USER }}
-          secure: true
-          ignore_cert: true
-
       - name: 发送失败通知邮件
         if: ${{ failure() }}
         uses: dawidd6/action-send-mail@v3
@@ -108,5 +93,3 @@ jobs:
             任务链接: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
           to: ${{ secrets.RECIPIENTS }}
           from: ${{ secrets.SMTP_USER }}
-          secure: true
-          ignore_cert: true
