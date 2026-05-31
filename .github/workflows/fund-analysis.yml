@@ -11,10 +11,10 @@ on:
         description: '保留数据天数'
         required: false
         default: '10'
-      wencai_query:
-        description: '问财选股查询语句，例如：场外基金近1年涨幅top200'
-        required: false
-        default: '场外基金近1年涨幅top200'
+      # wencai_query:
+      #   description: '问财选股查询语句，例如：场外基金近1年涨幅top200'
+      #   required: false
+      #   default: '场外基金近1年涨幅top200'
 
 jobs:
   analyze-funds:
