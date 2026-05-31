@@ -1,0 +1,39 @@
+# 忽略的文件和目录
+
+# 输出文件
+output/
+*.xlsx
+*.html
+
+# 图表目录
+基金趋势图_*/
+
+# 日志文件
+logs/
+*.log
+
+# Python 缓存
+__pycache__/
+*.pyc
+*.pyo
+.Python
+
+# 虚拟环境
+venv/
+env/
+.env/
+
+# 编辑器配置
+.vscode/
+.idea/
+*.swp
+*.bak
+*.tmp
+
+# 系统文件
+.DS_Store
+Thumbs.db
+
+# 敏感信息
+secrets.json
+.env.local

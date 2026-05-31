@@ -1,0 +1,122 @@
+name: 基金趋势分析报告
+
+on:
+  schedule:
+    # 每日09:00运行（北京时间）
+    - cron: '0 1 * * *'
+  workflow_dispatch:
+    # 允许手动触发
+    inputs:
+      days_to_keep:
+        description: '保留数据天数'
+        required: false
+        default: '10'
+      wencai_query:
+        description: '问财选股查询语句，例如：场外基金近1年涨幅top200'
+        required: false
+        default: '场外基金近1年涨幅top200'
+
+jobs:
+  analyze-funds:
+    runs-on: ubuntu-latest
+    timeout-minutes: 180
+
+    steps:
+      - name: 检出代码
+        uses: actions/checkout@v3
+
+      - name: 设置 Python 环境
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.9'
+
+      - name: 缓存 pip 依赖
+        uses: actions/cache@v3
+        with:
+          path: ~/.cache/pip
+          key: ${{ runner.os }}-pip-${{ hashFiles('requirements.txt') }}
+          restore-keys: |
+            ${{ runner.os }}-pip-
+
+      - name: 安装依赖
+        run: |
+          pip install --upgrade pip
+          pip install pandas numpy matplotlib xalpha openpyxl pywencai baostock
+
+      - name: 运行场外基金分析
+        id: analyze-fund
+        env:
+          WENCAI_QUERY: ${{ secrets.WENCAI_QUERY || github.event.inputs.wencai_query || '场外基金近1年涨幅top200' }}
+        run: |
+          python "基金趋势大模型_WMA.py"
+
+      - name: 运行宽基指数分析
+        id: analyze-index
+        run: |
+          python "宽基指数趋势大模型_EMA.py"
+
+      - name: 创建整合报告
+        id: merge-reports
+        run: |
+          python -c "
+import pandas as pd
+import os
+
+fund_df = pd.read_excel('基金趋势分析.xlsx')
+index_df = pd.read_excel('宽基指数趋势分析.xlsx')
+
+with pd.ExcelWriter('基金与指数趋势分析.xlsx', engine='openpyxl') as writer:
+    fund_df.to_excel(writer, sheet_name='场外基金', index=False)
+    index_df.to_excel(writer, sheet_name='宽基指数', index=False)
+
+print('整合报告已生成: 基金与指数趋势分析.xlsx')
+"
+
+      - name: 创建输出目录并移动文件
+        run: |
+          mkdir -p output
+          mkdir -p logs
+          mv "基金趋势分析.xlsx" output/ 2>/dev/null || true
+          mv "宽基指数趋势分析.xlsx" output/ 2>/dev/null || true
+          mv "基金与指数趋势分析.xlsx" output/ 2>/dev/null || true
+          mv "基金趋势图_"*/ output/ 2>/dev/null || true
+          mv "宽基指数邮件正文.html" output/ 2>/dev/null || true
+
+      - name: 上传报告文件
+        uses: actions/upload-artifact@v4
+        with:
+          name: fund-reports
+          path: |
+            output/*.xlsx
+            output/*.png
+            output/*.html
+            logs/*.log
+
+      - name: 发送成功通知邮件
+        if: ${{ success() }}
+        uses: dawidd6/action-send-mail@v3
+        with:
+          server_address: ${{ secrets.SMTP_SERVER }}
+          server_port: ${{ secrets.SMTP_PORT }}
+          username: ${{ secrets.SMTP_USER }}
+          password: ${{ secrets.SMTP_PASSWORD }}
+          subject: 📊 宽基指数趋势分析报告 - ${{ format('{0:YYYY-MM-DD}', github.event.created_at) || format('{0:YYYY-MM-DD}', now()) }}
+          body: file://output/宽基指数邮件正文.html
+          to: ${{ secrets.RECIPIENTS }}
+          from: ${{ secrets.SMTP_USER }}
+          content_type: text/html
+
+      - name: 发送失败通知邮件
+        if: ${{ failure() }}
+        uses: dawidd6/action-send-mail@v3
+        with:
+          server_address: ${{ secrets.SMTP_SERVER }}
+          server_port: ${{ secrets.SMTP_PORT }}
+          username: ${{ secrets.SMTP_USER }}
+          password: ${{ secrets.SMTP_PASSWORD }}
+          subject: ❌ 基金分析任务失败通知
+          body: |
+            基金分析任务失败，请检查GitHub Actions日志。
+            任务链接: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+          to: ${{ secrets.RECIPIENTS }}
+          from: ${{ secrets.SMTP_USER }}
