@@ -60,14 +60,23 @@ python "宽基指数趋势大模型_EMA.py"
 
 在 GitHub Secrets 中添加以下配置：
 
-| Secret | 说明 |
-|--------|------|
-| SMTP_SERVER | 邮件服务器地址 |
-| SMTP_PORT | 邮件服务器端口 |
-| SMTP_USER | 发件人邮箱 |
-| SMTP_PASSWORD | 邮箱密码/授权码 |
-| RECIPIENTS | 收件人邮箱（逗号分隔） |
-| WENCAI_QUERY | 问财查询语句（可选） |
+| Secret | 示例值 | 说明 |
+|--------|--------|------|
+| SMTP_SERVER | `smtp.qq.com` | QQ 邮箱 SMTP 服务器地址 |
+| SMTP_PORT | `465` | QQ 邮箱 SMTP 端口（SSL 加密） |
+| SMTP_USER | `123456789@qq.com` | 发件人 QQ 邮箱地址 |
+| SMTP_PASSWORD | `abcdefghijklmn` | QQ 邮箱授权码（非 QQ 密码） |
+| RECIPIENTS | `recipient1@qq.com,recipient2@example.com` | 收件人邮箱（多个用逗号分隔） |
+| WENCAI_QUERY | `场外基金近1年涨幅top200` | 问财查询语句（可选） |
+
+#### 如何获取 QQ 邮箱授权码
+
+1. 登录 QQ 邮箱网页版
+2. 点击 **设置** → **账户**
+3. 找到 **POP3/IMAP/SMTP/Exchange/CardDAV/CalDAV服务**
+4. 开启 **SMTP 服务**
+5. 点击 **生成授权码**（需要手机验证码）
+6. 将生成的授权码填入 GitHub Secrets 的 `SMTP_PASSWORD` 中
 
 ## 指标说明
 
