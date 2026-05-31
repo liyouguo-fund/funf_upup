@@ -11,10 +11,10 @@ on:
         description: '保留数据天数'
         required: false
         default: '10'
-      # wencai_query:
-      #   description: '问财选股查询语句，例如：场外基金近1年涨幅top200'
-      #   required: false
-      #   default: '场外基金近1年涨幅top200'
+      wencai_query:
+        description: '问财选股查询语句，例如：场外基金近1年涨幅top200'
+        required: false
+        default: '场外基金近1年涨幅top200'
 
 jobs:
   analyze-funds:
@@ -88,10 +88,10 @@ jobs:
           username: ${{ secrets.SMTP_USER }}
           password: ${{ secrets.SMTP_PASSWORD }}
           subject: 📊 宽基指数趋势分析报告
-          body: file://output/宽基指数邮件正文.html
+          html_body: file://output/宽基指数邮件正文.html
           to: ${{ secrets.RECIPIENTS }}
           from: ${{ secrets.SMTP_USER }}
-          content_type: text/html
+          secure: true
 
       - name: 发送失败通知邮件
         if: ${{ failure() }}
@@ -107,3 +107,4 @@ jobs:
             任务链接: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
           to: ${{ secrets.RECIPIENTS }}
           from: ${{ secrets.SMTP_USER }}
+          secure: true
